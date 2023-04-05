@@ -11,7 +11,3 @@ Clients and Client APIs
     android_library/index
     WebDAV/index
     OCS/index
-    LoginFlow/index
-    RemoteWipe/index
-    activity-api
-

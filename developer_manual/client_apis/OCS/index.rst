@@ -4,11 +4,4 @@
 OCS API
 ===============================
 
-.. toctree::
-
-   ocs-api-overview
-   ocs-share-api
-   ocs-sharee-api
-   ocs-status-api
-   ocs-recommendations-api
-   ocs-user-preferences-api
+To browse the OCS API documentation please go `here <../../_static/openapi.html>`_.
