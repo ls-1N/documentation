@@ -35,21 +35,27 @@ Configuring an SMTP server
 You need the following information from your mail server administrator to
 connect Nextcloud to a remote SMTP server:
 
-* Encryption type: None, SSL/TLS, or STARTTLS
+.. warning:: There were changes to the 3rd party mailer library:
+    
+    1. STARTTLS cannot be enforced. It will be used automatically if the mail server supports it.
+    The encryption type should be set to 'None' in this case. 
+    See further below for an example on how to configure self signed certificates
+
+    2. LOGIN is the only supported authentication method as from Nextcloud 26.
+
+* Encryption type: None or SSL/TLS
 
 * The From address you want your outgoing Nextcloud mails to use
 
 * Whether authentication is required
 
-* Authentication method: None, Login, Plain, or NT LAN Manager
+* Authentication method: always 'Login' - this option will only apply when authentication is required
 
 * The server's IP address or fully-qualified domain name and the SMTP port
 
 * Login credentials (if required)
 
 .. note:: The ``overwrite.cli.url`` parameter from ``config.php`` will be used for the SMTP EHLO.
-
-.. figure:: ../images/smtp-config-smtp.png
 
 Your changes are saved immediately, and you can click the Send Email button to
 test your configuration. This sends a test message to the email address you
@@ -60,6 +66,7 @@ configured on your Personal page. The test message says::
   --
   Nextcloud
   a safe home for all your data
+
 
 Configuring Sendmail/qmail
 --------------------------
@@ -200,8 +207,7 @@ authentication, if not, the default values can be taken as is.
     "mail_smtppassword" => "",
 
 If SMTP authentication is required you have to set the required username
-and password and can optionally choose between the authentication types
-**LOGIN** (default) or **PLAIN**.
+and password. Only authentication type **LOGIN** is supported.
 
 ::
 
@@ -209,13 +215,6 @@ and password and can optionally choose between the authentication types
     "mail_smtpauthtype" => "LOGIN",
     "mail_smtpname"     => "username",
     "mail_smtppassword" => "password",
-
-Advanced users can add additional stream options in ``config/config.php``,
-which maps directly to `Swift Mailer's <https://swiftmailer.symfony.com/>`_
-``streamOptions`` configuration parameter:
-::
-
-    "mail_smtpstreamoptions" => array(),
 
 Sendmail
 ^^^^^^^^
@@ -381,8 +380,8 @@ using the ``telnet`` command.
   221 smtp.domain.dom closing connection
   Connection closed by foreign host.
 
-**Question**: How can I send mail when using self-signed certificates if
-remote SMTP server do not have options to allow this on their side?
+**Question**: How can I send mail using self-signed certificates or use STARTTLS
+ with self signed certificates?
 
 **Answer**: If you are having remote SMTP setup, you can try adding this
 to your ``config/config.php``::
@@ -394,6 +393,10 @@ to your ``config/config.php``::
             'verify_peer_name' => false
         )
     ),
+
+**Question**: All emails keep getting rejected even though only one email address is invalid.
+
+**Answer**: Partial sending, i. e. sending to all but the faulty email address is not possible.
 
 Enabling debug mode
 -------------------
