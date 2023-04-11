@@ -5,67 +5,186 @@ Reference providers
 Reference providers are related with two Nextcloud features:
 
 * Link previews
-* The smart picker
+* The Smart Picker
 
 Link previews were introduced in Nextcloud 25.
-To provide link previews, we need to:
+Apps can register a reference provider to add preview support for new HTTP links.
+To provide link previews, a provider needs to:
 
-* Resolve links (get information about links)
+* Resolve the links (get information about the links)
 * Render links (show this information in the user interface)
 
-The smart picker was introduced in Nextcloud 26. This is a user interface component
-to allow users to search or generate links from various places in Nextcloud.
+The Smart Picker was introduced in Nextcloud 26. This is a user interface component
+allowing users to search or generate links from various places in Nextcloud like Text,
+Talk, Collectives, Notes, Mail...
+Reference providers can be implemented so they appear in the provider list of the Smart Picker.
+The Smart Picker can show 2 types of providers:
 
-App developers can register their own reference providers to:
+* the ones to search (using existing Unified Search providers)
+* the ones implementing their own custom picker component
 
-* add support for new kinds of HTTP links by:
-    * resolving the links, getting information on the link targets
+In summary, reference providers can be registered by apps to
+
+* add support for new kinds of HTTP links
+    * resolve the links, get information on the link targets
     * optionally provide their own reference widgets to have a custom preview rendering
-* extend the link picker with:
-    * supporting existing unified search providers
-    * optionally register custom picker components
+* extend the Smart Picker
+    * use existing Unified Search providers
+    * or optionally register custom picker components to have a specific user interface
 
 Display link previews
 ---------------------------
 
-You need to make sure the `OCP\\Collaboration\\Reference\\RenderReferenceEvent` is dispatched
-before you load the page where you want to display link previews or the link picker.
+If you just want to use the reference system to display link previews without extending it,
+you need to make sure the ``OCP\Collaboration\Reference\RenderReferenceEvent`` is dispatched
+before you load the page where you want to display link previews.
 
-Link previews will be automatically rendered in the `NcRichText` component.
+For example, you can place this before returning your TemplateResponse in your controller:
 
-You can also render the preview of one specific link by using the `NcReferenceWidget` component.
+.. code-block:: php
 
-Implement and register a reference provider
+    $this->eventDispatcher->dispatchTyped(new OCP\Collaboration\Reference\RenderReferenceEvent());
+
+This is done in Text and Talk if you need more examples.
+
+On the frontend side, there are 2 ways to display link previews (also named reference widgets):
+
+NcRichText
+~~~~~~~~~~~~~
+
+Link previews will be automatically rendered for links in the content of the ``<NcRichText>`` Vue component.
+This component will take care of resolving the links itself.
+
+.. code-block:: html
+
+    <NcRichText :text="message"
+		:arguments="richParameters"
+		:autolink="true"
+		:reference-limit="0" />
+
+NcRichText can be imported like this:
+
+.. code-block:: javascript
+
+    import NcRichText from '@nextcloud/vue/dist/Components/NcRichText.js'
+
+
+`NcRichText doc <https://nextcloud-vue-components.netlify.app/#/Components/NcRichText?id=ncrichtext-1>`_
+
+NcReferenceWidget
+~~~~~~~~~~~~~
+
+You can display a preview for a specific link by using the ``<NcReferenceWidget>`` component.
+You need to ask the server to resolve the link to get a reference object that you can then give as a property
+to NcReferenceWidget
+
+To resolve a link:
+
+.. code-block:: javascript
+
+    const myLink = 'https://github.com'
+    axios.get(generateOcsUrl('references/resolve', 2) + '?reference=' + encodeURIComponent(myLink))
+        .then((response) => {
+            reference = response.data.ocs.data.references[myLink]
+        })
+
+Then you can use the reference object you got:
+
+.. code-block:: html
+
+    <NcReferenceWidget :reference="reference" />
+
+Register a reference provider
 ---------------------------
 
-A reference provider is a class implementing the `OCP\\Collaboration\\Reference\\IReferenceProvider` interface.
-If you just want to resolve links, implement the `IReferenceProvider` interface.
+A reference provider is a class implementing the ``OCP\Collaboration\Reference\IReferenceProvider`` interface.
+If you just want to resolve links, implement the ``IReferenceProvider`` interface.
+This is described in the "Resolving links" section.
 
-If you want your reference provider to be used by the smart picker, you need to extend the
-`OCP\\Collaboration\\Reference\\ADiscoverableReferenceProvider` class to declare all required information.
+If you want your reference provider to be used by the Smart Picker, you need to extend the
+``OCP\Collaboration\Reference\ADiscoverableReferenceProvider`` class to declare all required information.
 There are 2 ways to appear in the smart picker.
 
 * Either your reference provider implements the
-`OCP\\Collaboration\\Reference\\ISearchableReferenceProvider` interface and you declare a list of unified search providers
-that will be used in the smart picker
-* or you don't implement this `ISearchableReferenceProvider` interface and make sure you register a custom picker component in the frontend.
+``OCP\Collaboration\Reference\ISearchableReferenceProvider`` interface and you declare a list of unified search providers
+that will be used in the Smart Picker
+* or you don't implement this ``ISearchableReferenceProvider`` interface and make sure you register a custom picker component in the frontend.
 This is described later in this documentation.
 
-Resolving links
+Link previews
 ---------------------------
 
-`NcRichText`, `NcReferenceList` and `NcReferenceWidget` will resolve and render links for you.
-If you need to
+Links that are not matched by any reference provider will always be handled by the OpenGraph provider as a fallback.
+This provider will try to get the information declared in the target page. The link preview will be rendered with the
+default widget.
+
+For your provider to properly handle some links,
+you need to implement the ``matchReference`` and ``resolve`` methods of ``IReferenceProvider``.
+
+Match links
+~~~~~~~~~~~~~~~~~~
+
+The ``matchReference`` method of ``IReferenceProvider`` is used to know if a provider supports a link or not.
+
+.. code-block:: php
+
+    public function matchReference(string $referenceText): bool {
+        // support all URLs starting with https://my.website.org
+        return str_starts_with($referenceText, 'https://my.website.org/');
+    }
+
+Resolving links
+~~~~~~~~~~~~~~~~~~
+
+The ``resolve`` method of ``IReferenceProvider`` is used to get information about a link and return it in a structured
+way via a ``OCP\Collaboration\Reference\Reference`` object.
 
 Using the default widget
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you are fine with the default
+If you are fine with the default widget rendering (image on the left, text and subtext on the right),
+then you just need to provide a title, a description and optionally an image.
+
+.. code-block:: php
+
+    public function resolveReference(string $referenceText): ?IReference {
+        if ($this->matchReference($referenceText)) {
+            $title = $this->myAwesomeService->getLinkTitle($referenceText);
+            $description = $this->myAwesomeService->getLinkDescription($referenceText);
+            $imageUrl = $this->myAwesomeService->getImageUrl($referenceText);
+
+            $reference = new Reference($referenceText);
+            $reference->setTitle($title);
+            $reference->setDescription($description);
+            $reference->setImageUrl($imageUrl);
+            return $reference;
+        }
+        return null;
+    }
 
 Using custom reference widgets
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Use the reference provider in the link picker
+TODO
+
+.. code-block:: php
+
+    public function resolveReference(string $referenceText): ?IReference {
+        if ($this->matchReference($referenceText)) {
+            $title = $this->myAwesomeService->getLinkTitle($referenceText);
+            $description = $this->myAwesomeService->getLinkDescription($referenceText);
+            $imageUrl = $this->myAwesomeService->getImageUrl($referenceText);
+
+            $reference = new Reference($referenceText);
+            $reference->setTitle($title);
+            $reference->setDescription($description);
+            $reference->setImageUrl($imageUrl);
+            return $reference;
+        }
+        return null;
+    }
+
+Smart Picker
 ---------------------------
 
 For you reference provider to appear in the link picker, it needs to be discoverable
@@ -85,7 +204,7 @@ Extending `ADiscoverableReferenceProvider` implies defining those methods:
 * `getIconUrl`: returns the URL of the provider icon, same as the title, the icon will be visible in the provider list
 
 Declare supported unified search providers
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~
 
 If you want your reference provider to let users pick links from unified search results, your reference provider must
 implement `OCP\\Collaboration\\Reference\\ISearchableReferenceProvider` and define the `getSupportedSearchProviderIds`
@@ -96,7 +215,7 @@ all the search providers you declared as supported. Once a result is selected, t
 the associated resource URL.
 
 Register a custom picker component
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~
 
 On the bakend side, in your `lib/AppInfo/Application.php`, you should listen to the
 `OCP\\Collaboration\\Reference\\RenderReferenceEvent`. In the corresponding listener, you should load
