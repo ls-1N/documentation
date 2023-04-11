@@ -5,33 +5,62 @@ Reference providers
 Reference providers are related with two Nextcloud features:
 
 * Link previews
-* The link picker
+* The smart picker
 
-Link previews were introduced in Nextcloud 25. are rendered in...
+Link previews were introduced in Nextcloud 25.
+To provide link previews, we need to:
 
-The link picker...
+* Resolve links (get information about links)
+* Render links (show this information in the user interface)
+
+The smart picker was introduced in Nextcloud 26. This is a user interface component
+to allow users to search or generate links from various places in Nextcloud.
 
 App developers can register their own reference providers to:
 
 * add support for new kinds of HTTP links by:
     * resolving the links, getting information on the link targets
-    * optionally provide their own reference widgets
+    * optionally provide their own reference widgets to have a custom preview rendering
 * extend the link picker with:
     * supporting existing unified search providers
     * optionally register custom picker components
 
-
-Register a reference provider
+Display link previews
 ---------------------------
 
-A reference provider is represented by a class implementing the `OCP\\Collaboration\\Reference\\IReferenceProvider`
+You need to make sure the `OCP\\Collaboration\\Reference\\RenderReferenceEvent` is dispatched
+before you load the page where you want to display link previews or the link picker.
 
+Link previews will be automatically rendered in the `NcRichText` component.
+
+You can also render the preview of one specific link by using the `NcReferenceWidget` component.
+
+Implement and register a reference provider
+---------------------------
+
+A reference provider is a class implementing the `OCP\\Collaboration\\Reference\\IReferenceProvider` interface.
+If you just want to resolve links, implement the `IReferenceProvider` interface.
+
+If you want your reference provider to be used by the smart picker, you need to extend the
+`OCP\\Collaboration\\Reference\\ADiscoverableReferenceProvider` class to declare all required information.
+There are 2 ways to appear in the smart picker.
+
+* Either your reference provider implements the
+`OCP\\Collaboration\\Reference\\ISearchableReferenceProvider` interface and you declare a list of unified search providers
+that will be used in the smart picker
+* or you don't implement this `ISearchableReferenceProvider` interface and make sure you register a custom picker component in the frontend.
+This is described later in this documentation.
 
 Resolving links
 ---------------------------
 
+`NcRichText`, `NcReferenceList` and `NcReferenceWidget` will resolve and render links for you.
+If you need to
+
 Using the default widget
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you are fine with the default
 
 Using custom reference widgets
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -68,6 +97,10 @@ the associated resource URL.
 
 Register a custom picker component
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+On the bakend side, in your `lib/AppInfo/Application.php`, you should listen to the
+`OCP\\Collaboration\\Reference\\RenderReferenceEvent`. In the corresponding listener, you should load
+the scripts that will register custom picker components.
 
 You can implement your own picker interface by registering a custom picker component. This can be done with the
 `registerCustomPickerElement` function from `@nextcloud/vue-richtext` (>= 2.1.0-beta.5).
