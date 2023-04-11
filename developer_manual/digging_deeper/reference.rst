@@ -165,7 +165,11 @@ then you just need to provide a title, a description and optionally an image.
 Using custom reference widgets
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-TODO
+You can customize the rendering of the links you support with your provider.
+
+On the provider side, you need to pass all the information needed by your
+custom reference widget component by setting the "rich object" of the ``Reference``
+object returned by the ``resolve`` method.
 
 .. code-block:: php
 
@@ -174,15 +178,124 @@ TODO
             $title = $this->myAwesomeService->getLinkTitle($referenceText);
             $description = $this->myAwesomeService->getLinkDescription($referenceText);
             $imageUrl = $this->myAwesomeService->getImageUrl($referenceText);
+            $extraInformation = $this->myAwesomeService->getExtraInformation($referenceText);
 
             $reference = new Reference($referenceText);
-            $reference->setTitle($title);
-            $reference->setDescription($description);
-            $reference->setImageUrl($imageUrl);
+            $reference->setRichObject(
+                'my_rich_object_type',
+                [
+                    'title' => $title,
+                    'description' => $description,
+                    'image_url' => $imageUrl,
+                    'extra_info' => $extraInformation,
+                ]
+            );
+
             return $reference;
         }
         return null;
     }
+
+On the frontend side you need to implement and register your custom component. Here is a component example:
+
+You need to react to the ``OCP\Collaboration\Reference\RenderReferenceEvent``
+event to inject a script that will actually register the widget component.
+For example, in your ``lib/AppInfo/Application.php`` file:
+
+.. code-block:: php
+
+    $context->registerEventListener(OCP\Collaboration\Reference\RenderReferenceEvent::class, MyReferenceListener::class);
+
+The corresponding ``MyReferenceListener`` class can look like:
+
+.. code-block:: php
+
+    <?php
+    namespace OCA\MyApp\Listener;
+
+    use OCA\MyApp\AppInfo\Application;
+    use OCP\Collaboration\Reference\RenderReferenceEvent;
+    use OCP\EventDispatcher\Event;
+    use OCP\EventDispatcher\IEventListener;
+    use OCP\Util;
+
+    class MyReferenceListener implements IEventListener {
+        public function handle(Event $event): void {
+            if (!$event instanceof RenderReferenceEvent) {
+                return;
+            }
+
+            Util::addScript(Application::APP_ID, 'myapp-reference');
+        }
+    }
+
+The ``myapp-reference.js`` file contains the widget registration:
+
+.. code-block:: javascript
+
+    import { registerWidget } from '@nextcloud/vue-richtext'
+    import Vue from 'vue'
+    import MyCustomWidgetComponent from './MyCustomWidgetComponent.vue'
+
+    Vue.mixin({ methods: { t, n } })
+
+    // here we register the MyCustomWidgetComponent to handle rich objects which type is 'my_rich_object_type'
+    registerWidget('my_rich_object_type', (el, { richObjectType, richObject, accessible }) => {
+        const Widget = Vue.extend(MyCustomWidgetComponent)
+        new Widget({
+            propsData: {
+                richObjectType,
+                richObject,
+                accessible,
+            },
+        }).$mount(el)
+    })
+
+And last but not least, the MyCustomWidgetComponent Vue component:
+
+.. code-block:: html
+
+    <template>
+        <div v-if="richObject">
+            <div>
+                <label>
+                    {{ t('myapp', 'Title' }}
+                </label>
+                <span>
+                    {{ richObject.title }}
+                </span>
+            <div>
+            <div>
+                <label>
+                    {{ t('myapp', 'Extra info' }}
+                </label>
+                <span>
+                    {{ richObject.extra_info }}
+                </span>
+            <div>
+        </div>
+    </template>
+
+    <script>
+    export default {
+        name: 'MyCustomWidgetComponent',
+        props: {
+            richObjectType: {
+                type: String,
+                default: '',
+            },
+            richObject: {
+                type: Object,
+                default: null,
+            },
+            accessible: {
+                type: Boolean,
+                default: true,
+            },
+        },
+    }
+    </script>
+
 
 Smart Picker
 ---------------------------
